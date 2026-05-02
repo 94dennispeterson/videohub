@@ -21,14 +21,22 @@ COOKIES_DIR = os.path.join(tempfile.gettempdir(), "videohub_cookies")
 os.makedirs(COOKIES_DIR, exist_ok=True)
 
 COOKIE_FILES = {}
-for plat, env_var in [("youtube", "Cookies_youtube"), ("instagram", "Cookies_instagram")]:
-    conteudo = os.environ.get(env_var, "")
-    if conteudo.strip():
-        caminho = os.path.join(COOKIES_DIR, f"{plat}.txt")
-        with open(caminho, "w", encoding="utf-8") as f:
-            f.write(conteudo)
-        COOKIE_FILES[plat] = caminho
-        print(f"[cookies] {plat} carregado")
+variacoes = {
+    "youtube": ["COOKIES_YOUTUBE", "Cookies_youtube", "cookies_youtube"],
+    "instagram": ["COOKIES_INSTAGRAM", "Cookies_instagram", "cookies_instagram"],
+}
+for plat, nomes in variacoes.items():
+    for env_var in nomes:
+        conteudo = os.environ.get(env_var, "")
+        if conteudo.strip():
+            caminho = os.path.join(COOKIES_DIR, f"{plat}.txt")
+            with open(caminho, "w", encoding="utf-8") as f:
+                f.write(conteudo)
+            COOKIE_FILES[plat] = caminho
+            print(f"[cookies] {plat} carregado via {env_var}")
+            break
+    else:
+        print(f"[cookies] AVISO: nenhum cookie encontrado para {plat}")
 
 def get_cookie_file(url):
     if "youtube.com" in url or "youtu.be" in url:
