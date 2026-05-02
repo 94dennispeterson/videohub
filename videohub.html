@@ -399,7 +399,7 @@ async function baixar(p) {
 
     const btns = data.formatos.map(f => {
       const dlUrl = `${API}/baixar?url=${encodeURIComponent(url)}&fmt=${encodeURIComponent(f.format_id)}&ext=${f.ext}`;
-      return `<a class="q-btn" href="${dlUrl}" onclick="aviso_dl(this)" download="${'video'}.${f.ext}">${dlIcon}${f.label}</a>`;
+      return `<button class="q-btn" onclick="iniciarDownload('${dlUrl}', this)">${dlIcon}${f.label}</button>`;
     }).join('');
 
     mostrar(resId, `
@@ -411,6 +411,68 @@ async function baixar(p) {
     `);
   } catch (e) {
     mostrar(resId, `<div class="error-msg">Não foi possível conectar ao servidor. Verifique se o server.py está rodando.</div>`);
+  }
+}
+
+async function iniciarDownload(dlUrl, btn) {
+  const card = btn.closest('.card');
+  const resArea = btn.closest('.result-area');
+  const input = card ? card.querySelector('input[type="text"]') : null;
+  const box = btn.closest('.result-box');
+
+  // Desabilita botões enquanto baixa
+  const botoes = box.querySelectorAll('.q-btn');
+  botoes.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
+
+  // Mostra status
+  let statusEl = box.querySelector('.dl-status');
+  if (!statusEl) {
+    statusEl = document.createElement('div');
+    statusEl.className = 'dl-status';
+    statusEl.style.cssText = 'margin-top:12px;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;';
+    box.appendChild(statusEl);
+  }
+  statusEl.innerHTML = '<div class="spinner" style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.15);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0"></div>Baixando, aguarde...';
+
+  try {
+    const resp = await fetch(dlUrl);
+    if (!resp.ok) throw new Error('Erro no servidor');
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    // Cria link invisível e clica — funciona no iOS Safari e Chrome
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = 'video.mp4';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+    // Contagem regressiva para limpar
+    let seg = 5;
+    statusEl.innerHTML = `<div style="width:10px;height:10px;border-radius:50%;background:currentColor;opacity:.6"></div><span class="msg-cnt">Download concluído! Limpando em ${seg}s...</span>`;
+    const iv = setInterval(() => {
+      seg--;
+      const s = statusEl.querySelector('.msg-cnt');
+      if (s) s.textContent = `Download concluído! Limpando em ${seg}s...`;
+      if (seg <= 0) {
+        clearInterval(iv);
+        if (input) input.value = '';
+        if (resArea) {
+          resArea.style.animation = 'fadeOut 0.4s ease forwards';
+          setTimeout(() => {
+            resArea.style.display = 'none';
+            resArea.style.animation = '';
+            resArea.innerHTML = '';
+          }, 400);
+        }
+      }
+    }, 1000);
+
+  } catch (e) {
+    statusEl.innerHTML = `<span style="color:#ff6b6b">Erro no download: ${e.message}</span>`;
+    botoes.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
   }
 }
 
