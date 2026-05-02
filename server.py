@@ -75,39 +75,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
 
+                # Monta opções de qualidade baseadas na altura do vídeo
+                alturas = set()
+                for f in info.get("formats", []):
+                    h = f.get("height")
+                    if h and f.get("vcodec", "none") != "none":
+                        alturas.add(h)
+
+                if not alturas:
+                    alturas = {720}  # fallback
+
                 formatos = []
-                vistos = set()
+                for h in sorted(alturas, reverse=True)[:5]:
+                    formatos.append({
+                        "label": f"{h}p (MP4)",
+                        "format_id": f"bv[height<={h}]+ba/b[height<={h}]/best",
+                        "ext": "mp4"
+                    })
 
-                for f in reversed(info.get("formats", [])):
-                    vcodec = f.get("vcodec", "none")
-                    height = f.get("height")
-                    ext = f.get("ext", "mp4")
-                    fid = f.get("format_id", "")
-                    furl = f.get("url", "")
-
-                    if not furl or not height or vcodec == "none":
-                        continue
-
-                    label = f"{height}p"
-                    if label in vistos:
-                        continue
-                    vistos.add(label)
-                    formatos.append({"label": f"{label} ({ext.upper()})", "format_id": fid, "ext": ext})
-
-                if not formatos:
-                    for f in reversed(info.get("formats", [])):
-                        furl = f.get("url", "")
-                        ext = f.get("ext", "mp4")
-                        fid = f.get("format_id", "")
-                        label = f.get("format_note") or fid or "video"
-                        if furl and label not in vistos:
-                            vistos.add(label)
-                            formatos.append({"label": label.upper(), "format_id": fid, "ext": ext})
+                # Sempre adiciona opção "Melhor qualidade"
+                formatos.insert(0, {
+                    "label": "Melhor qualidade (MP4)",
+                    "format_id": "bv+ba/best",
+                    "ext": "mp4"
+                })
 
                 self.responder_json(200, {
                     "titulo": info.get("title", "video"),
                     "thumbnail": info.get("thumbnail", ""),
-                    "formatos": formatos[:6],
+                    "formatos": formatos[:5],
                 })
             except Exception as e:
                 self.responder_json(500, {"erro": str(e)})
