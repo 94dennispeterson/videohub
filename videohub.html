@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VideoHub — Download de Vídeos</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --tw: #1da1f2;
+    --ig: #e1306c;
+    --yt: #ff0000;
+    --bg: #0a0a0f;
+    --surface: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.10);
+    --text: #f0eee8;
+    --muted: rgba(240,238,232,0.40);
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  .blob { position: fixed; border-radius: 50%; filter: blur(90px); z-index: 0; opacity: 0.15; pointer-events: none; }
+  .blob-1 { width: 500px; height: 500px; background: #1da1f2; top: -150px; left: -120px; }
+  .blob-2 { width: 400px; height: 400px; background: #e1306c; bottom: -80px; right: -80px; }
+  .blob-3 { width: 280px; height: 280px; background: #ff0000; top: 45%; left: 50%; }
+
+  .page {
+    position: relative; z-index: 1;
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 64px 20px 80px;
+  }
+
+  header { text-align: center; margin-bottom: 52px; }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 18px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(30px, 6vw, 50px);
+    font-weight: 800; line-height: 1.1;
+    margin-bottom: 14px;
+  }
+
+  .subtitle { font-size: 15px; color: var(--muted); line-height: 1.65; }
+
+  .cards { display: flex; flex-direction: column; gap: 14px; }
+
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 20px;
+    padding: 22px 22px 18px;
+    transition: border-color 0.25s, background 0.25s;
+  }
+  .card:hover { background: rgba(255,255,255,0.06); }
+
+  .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+
+  .card-icon {
+    width: 38px; height: 38px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .card-icon svg { width: 18px; height: 18px; }
+
+  .card-tw .card-icon { background: rgba(29,161,242,0.12); border: 0.5px solid #1da1f2; }
+  .card-tw .card-icon svg { fill: #1da1f2; }
+  .card-ig .card-icon { background: rgba(225,48,108,0.12); border: 0.5px solid #e1306c; }
+  .card-ig .card-icon svg { fill: #e1306c; }
+  .card-fb .card-icon { background: rgba(24,119,242,0.12); border: 0.5px solid #1877f2; }
+  .card-fb .card-icon svg { fill: #1877f2; }
+  .card-yt .card-icon { background: rgba(255,0,0,0.12); border: 0.5px solid #ff0000; }
+  .card-yt .card-icon svg { fill: #ff0000; }
+
+  .card-label { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; }
+  .card-sublabel { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .input-row { display: flex; gap: 10px; }
+
+  input[type="text"] {
+    flex: 1; min-width: 0;
+    background: rgba(0,0,0,0.35);
+    border: 0.5px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 11px 16px;
+    font-size: 14px; color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  input[type="text"]::placeholder { color: rgba(240,238,232,0.22); }
+
+  .card-tw input[type="text"]:focus { border-color: #1da1f2; background: rgba(0,0,0,0.5); }
+  .card-ig input[type="text"]:focus { border-color: #e1306c; background: rgba(0,0,0,0.5); }
+  .card-fb input[type="text"]:focus { border-color: #1877f2; background: rgba(0,0,0,0.5); }
+  .card-yt input[type="text"]:focus { border-color: #ff0000; background: rgba(0,0,0,0.5); }
+
+  .btn-dl {
+    border: none; border-radius: 12px;
+    padding: 11px 18px;
+    font-size: 14px; font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+    color: #fff; cursor: pointer; white-space: nowrap;
+    display: flex; align-items: center; gap: 7px;
+    transition: opacity 0.2s, transform 0.15s;
+    flex-shrink: 0;
+  }
+  .btn-dl:hover { opacity: 0.82; }
+  .btn-dl:active { transform: scale(0.97); }
+  .btn-dl svg { width: 14px; height: 14px; fill: #fff; }
+  .card-tw .btn-dl { background: #1da1f2; }
+  .card-ig .btn-dl { background: #e1306c; }
+  .card-fb .btn-dl { background: #1877f2; }
+  .card-yt .btn-dl { background: #ff0000; }
+
+  .result-area { margin-top: 14px; display: none; animation: fadeUp 0.3s ease; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes fadeOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px); } }
+
+  .loading-msg {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--muted); padding: 4px 0;
+  }
+
+  .spinner {
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.12);
+    animation: spin 0.7s linear infinite; flex-shrink: 0;
+  }
+  .card-tw .spinner { border-top-color: #1da1f2; }
+  .card-ig .spinner { border-top-color: #e1306c; }
+  .card-fb .spinner { border-top-color: #1877f2; }
+  .card-yt .spinner { border-top-color: #ff0000; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg { font-size: 13px; color: #ff6b6b; padding: 4px 0; }
+
+  .result-box {
+    background: rgba(0,0,0,0.3);
+    border: 0.5px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+
+  .thumb-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .thumb-row img { width: 72px; height: 48px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+  .thumb-title { font-size: 13px; font-weight: 500; line-height: 1.4; color: var(--text);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .quality-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); margin-bottom: 10px;
+  }
+
+  .quality-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .q-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 8px; padding: 7px 14px;
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; text-decoration: none;
+    font-family: 'DM Sans', sans-serif;
+    transition: opacity 0.2s;
+  }
+  .q-btn:hover { opacity: 0.75; }
+  .q-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+  .card-tw .q-btn { background: rgba(29,161,242,0.12); border: 0.5px solid #1da1f2; color: #1da1f2; }
+  .card-ig .q-btn { background: rgba(225,48,108,0.12); border: 0.5px solid #e1306c; color: #e1306c; }
+  .card-fb .q-btn { background: rgba(24,119,242,0.12); border: 0.5px solid #1877f2; color: #1877f2; }
+  .card-yt .q-btn { background: rgba(255,0,0,0.12); border: 0.5px solid #ff0000; color: #ff0000; }
+
+  .aviso-publico {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: rgba(255,200,0,0.06);
+    border: 0.5px solid rgba(255,200,0,0.22);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: rgba(255,210,60,0.80);
+    margin-bottom: 24px;
+    line-height: 1.55;
+  }
+
+  .status-bar {
+    margin-top: 40px;
+    background: rgba(255,255,255,0.03);
+    border: 0.5px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-ok { background: #4caf50; }
+  .dot-err { background: #ff5252; }
+  .dot-check { background: #888; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .notice {
+    margin-top: 32px; text-align: center;
+    font-size: 12px; color: rgba(240,238,232,0.18); line-height: 1.7;
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+
+<div class="page">
+  <header>
+    <div class="logo">VideoHub</div>
+    <h1>Baixe vídeos de qualquer lugar</h1>
+    <p class="subtitle">Twitter · Instagram · Facebook · YouTube — tudo em um só lugar.<br>Cole o link e baixe na qualidade que quiser.</p>
+  </header>
+
+  <div class="aviso-publico">
+    <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor;flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+    Apenas vídeos públicos podem ser baixados. Vídeos privados ou com restrição de acesso não funcionarão.
+  </div>
+
+  <div class="cards">
+
+    <!-- Twitter -->
+    <div class="card card-tw">
+      <div class="card-header">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </div>
+        <div>
+          <div class="card-label">Twitter / X</div>
+          <div class="card-sublabel">Baixar vídeo de tweet</div>
+        </div>
+      </div>
+      <div class="input-row">
+        <input type="text" id="tw-url" placeholder="https://x.com/usuario/status/..." />
+        <button class="btn-dl" onclick="baixar('tw')">
+          <svg viewBox="0 0 24 24"><path d="M12 16l-4-4h2.5V4h3v8H16l-4 4zm-7 4h14v-2H5v2z"/></svg>
+          Baixar
+        </button>
+      </div>
+      <div class="result-area" id="tw-res"></div>
+    </div>
+
+    <!-- Instagram -->
+    <div class="card card-ig">
+      <div class="card-header">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>
+        </div>
+        <div>
+          <div class="card-label">Instagram</div>
+          <div class="card-sublabel">Reels, vídeos e stories</div>
+        </div>
+      </div>
+      <div class="input-row">
+        <input type="text" id="ig-url" placeholder="https://www.instagram.com/reel/..." />
+        <button class="btn-dl" onclick="baixar('ig')">
+          <svg viewBox="0 0 24 24"><path d="M12 16l-4-4h2.5V4h3v8H16l-4 4zm-7 4h14v-2H5v2z"/></svg>
+          Baixar
+        </button>
+      </div>
+      <div class="result-area" id="ig-res"></div>
+    </div>
+
+    <!-- Facebook -->
+    <div class="card card-fb">
+      <div class="card-header">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        </div>
+        <div>
+          <div class="card-label">Facebook</div>
+          <div class="card-sublabel">Vídeos e Reels</div>
+        </div>
+      </div>
+      <div class="input-row">
+        <input type="text" id="fb-url" placeholder="https://www.facebook.com/watch?v=..." />
+        <button class="btn-dl" onclick="baixar('fb')">
+          <svg viewBox="0 0 24 24"><path d="M12 16l-4-4h2.5V4h3v8H16l-4 4zm-7 4h14v-2H5v2z"/></svg>
+          Baixar
+        </button>
+      </div>
+      <div class="result-area" id="fb-res"></div>
+    </div>
+    <div class="card card-yt">
+      <div class="card-header">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+        </div>
+        <div>
+          <div class="card-label">YouTube</div>
+          <div class="card-sublabel">Vídeos e Shorts</div>
+        </div>
+      </div>
+      <div class="input-row">
+        <input type="text" id="yt-url" placeholder="https://www.youtube.com/watch?v=..." />
+        <button class="btn-dl" onclick="baixar('yt')">
+          <svg viewBox="0 0 24 24"><path d="M12 16l-4-4h2.5V4h3v8H16l-4 4zm-7 4h14v-2H5v2z"/></svg>
+          Baixar
+        </button>
+      </div>
+      <div class="result-area" id="yt-res"></div>
+    </div>
+
+  </div>
+
+  <div class="status-bar" id="status-bar">
+    <div class="status-dot dot-check" id="status-dot"></div>
+    <span id="status-msg">Verificando conexão com o servidor...</span>
+  </div>
+
+  <p class="notice">Para uso pessoal. Respeite os direitos autorais e os termos de serviço de cada plataforma.</p>
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:8765'
+  : window.location.origin;
+
+const plat = {
+  tw: { url: 'tw-url', res: 'tw-res', valida: u => u.includes('x.com') || u.includes('twitter.com'), erro: 'Use um link do x.com ou twitter.com' },
+  ig: { url: 'ig-url', res: 'ig-res', valida: u => u.includes('instagram.com'), erro: 'Use um link do instagram.com' },
+  fb: { url: 'fb-url', res: 'fb-res', valida: u => u.includes('facebook.com') || u.includes('fb.watch'), erro: 'Use um link do facebook.com' },
+  yt: { url: 'yt-url', res: 'yt-res', valida: u => u.includes('youtube.com') || u.includes('youtu.be'), erro: 'Use um link do youtube.com' },
+};
+
+const dlIcon = `<svg viewBox="0 0 24 24"><path d="M12 16l-4-4h2.5V4h3v8H16l-4 4zm-7 4h14v-2H5v2z"/></svg>`;
+
+function mostrar(id, html) {
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  el.innerHTML = html;
+}
+
+function esconder(id) {
+  const el = document.getElementById(id);
+  el.style.display = 'none';
+}
+
+function spinnerHTML(card) {
+  return `<div class="loading-msg"><div class="spinner"></div>Buscando formatos disponíveis...</div>`;
+}
+
+async function baixar(p) {
+  const cfg = plat[p];
+  const url = document.getElementById(cfg.url).value.trim();
+  const resId = cfg.res;
+
+  if (!url) {
+    mostrar(resId, `<div class="error-msg">Cole o link do vídeo primeiro.</div>`);
+    return;
+  }
+  if (!cfg.valida(url)) {
+    mostrar(resId, `<div class="error-msg">${cfg.erro}</div>`);
+    return;
+  }
+
+  mostrar(resId, spinnerHTML(p));
+
+  try {
+    const resp = await fetch(`${API}/info?url=${encodeURIComponent(url)}`);
+    const data = await resp.json();
+
+    if (data.erro) {
+      mostrar(resId, `<div class="error-msg">Erro: ${data.erro}</div>`);
+      return;
+    }
+
+    const thumbHTML = data.thumbnail
+      ? `<div class="thumb-row"><img src="${data.thumbnail}" alt="" onerror="this.style.display='none'" /><div class="thumb-title">${data.titulo || 'Vídeo'}</div></div>`
+      : `<div class="thumb-title" style="margin-bottom:12px">${data.titulo || 'Vídeo'}</div>`;
+
+    const btns = data.formatos.map(f => {
+      const dlUrl = `${API}/baixar?url=${encodeURIComponent(url)}&fmt=${encodeURIComponent(f.format_id)}&ext=${f.ext}`;
+      return `<a class="q-btn" href="${dlUrl}" onclick="aviso_dl(this)" download="${'video'}.${f.ext}">${dlIcon}${f.label}</a>`;
+    }).join('');
+
+    mostrar(resId, `
+      <div class="result-box">
+        ${thumbHTML}
+        <div class="quality-label">Escolha a qualidade</div>
+        <div class="quality-btns">${btns || '<span style="color:var(--muted);font-size:13px">Nenhum formato encontrado.</span>'}</div>
+      </div>
+    `);
+  } catch (e) {
+    mostrar(resId, `<div class="error-msg">Não foi possível conectar ao servidor. Verifique se o server.py está rodando.</div>`);
+  }
+}
+
+function aviso_dl(el) {
+  const box = el.closest('.result-box');
+  const resArea = el.closest('.result-area');
+  const card = el.closest('.card');
+  const input = card ? card.querySelector('input[type="text"]') : null;
+  if (!box) return;
+
+  // Mostra aviso com contagem regressiva
+  const aviso = document.createElement('div');
+  aviso.style.cssText = 'margin-top:12px;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;';
+  aviso.innerHTML = '<div style="width:10px;height:10px;border-radius:50%;background:currentColor;animation:pulse 1s infinite;opacity:.6"></div><span id="msg-contagem">Download iniciado! Limpando em 5s...</span>';
+  box.appendChild(aviso);
+
+  let seg = 5;
+  const intervalo = setInterval(() => {
+    seg--;
+    const span = document.getElementById('msg-contagem');
+    if (span) span.textContent = `Download iniciado! Limpando em ${seg}s...`;
+    if (seg <= 0) {
+      clearInterval(intervalo);
+      // Limpa o campo de input e esconde a área de resultado
+      if (input) input.value = '';
+      if (resArea) {
+        resArea.style.animation = 'fadeOut 0.4s ease forwards';
+        setTimeout(() => {
+          resArea.style.display = 'none';
+          resArea.style.animation = '';
+          resArea.innerHTML = '';
+        }, 400);
+      }
+    }
+  }, 1000);
+}
+
+// Tecla Enter nos inputs
+document.querySelectorAll('input[type="text"]').forEach(inp => {
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const id = inp.id.replace('-url', '');
+      baixar(id);
+    }
+  });
+});
+
+// Verificar status do servidor
+async function checarServidor() {
+  const dot = document.getElementById('status-dot');
+  const msg = document.getElementById('status-msg');
+  try {
+    const r = await fetch(`${API}/info?url=teste`, { signal: AbortSignal.timeout(3000) });
+    dot.className = 'status-dot dot-ok';
+    msg.textContent = 'Servidor rodando — pronto para baixar!';
+  } catch {
+    dot.className = 'status-dot dot-err';
+    msg.textContent = 'Servidor offline — abra o server.py primeiro.';
+  }
+}
+
+checarServidor();
+setInterval(checarServidor, 10000);
+</script>
+</body>
+</html>

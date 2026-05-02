@@ -1,0 +1,185 @@
+import http.server
+import json
+import os
+import urllib.parse
+import tempfile
+import shutil
+import time
+import socketserver
+
+import yt_dlp
+
+PORT = int(os.environ.get("PORT", 8765))
+
+PASTA_TEMP = os.path.join(tempfile.gettempdir(), "videohub_downloads")
+os.makedirs(PASTA_TEMP, exist_ok=True)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+class Handler(http.server.BaseHTTPRequestHandler):
+
+    def log_message(self, format, *args):
+        pass
+
+    def send_cors(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_cors()
+        self.end_headers()
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        # Serve o HTML principal
+        if parsed.path == "/" or parsed.path == "/index.html":
+            self.servir_arquivo("videohub.html", "text/html; charset=utf-8")
+            return
+
+        # Busca formatos do vídeo
+        if parsed.path == "/info":
+            url = params.get("url", [None])[0]
+            if not url:
+                self.responder_json(400, {"erro": "URL nao fornecida"})
+                return
+            try:
+                ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+
+                formatos = []
+                vistos = set()
+
+                for f in reversed(info.get("formats", [])):
+                    vcodec = f.get("vcodec", "none")
+                    height = f.get("height")
+                    ext = f.get("ext", "mp4")
+                    fid = f.get("format_id", "")
+                    furl = f.get("url", "")
+
+                    if not furl or not height or vcodec == "none":
+                        continue
+
+                    label = f"{height}p"
+                    if label in vistos:
+                        continue
+                    vistos.add(label)
+                    formatos.append({"label": f"{label} ({ext.upper()})", "format_id": fid, "ext": ext})
+
+                if not formatos:
+                    for f in reversed(info.get("formats", [])):
+                        furl = f.get("url", "")
+                        ext = f.get("ext", "mp4")
+                        fid = f.get("format_id", "")
+                        label = f.get("format_note") or fid or "video"
+                        if furl and label not in vistos:
+                            vistos.add(label)
+                            formatos.append({"label": label.upper(), "format_id": fid, "ext": ext})
+
+                self.responder_json(200, {
+                    "titulo": info.get("title", "video"),
+                    "thumbnail": info.get("thumbnail", ""),
+                    "formatos": formatos[:6],
+                })
+            except Exception as e:
+                self.responder_json(500, {"erro": str(e)})
+
+        # Faz o download e envia o arquivo
+        elif parsed.path == "/baixar":
+            url = params.get("url", [None])[0]
+            fmt = params.get("fmt", [None])[0]
+
+            if not url or not fmt:
+                self.responder_json(400, {"erro": "Parametros faltando"})
+                return
+
+            try:
+                nome_base = f"video_{int(time.time())}"
+                saida = os.path.join(PASTA_TEMP, nome_base + ".%(ext)s")
+
+                ydl_opts = {
+                    "quiet": True,
+                    "no_warnings": True,
+                    "format": fmt,
+                    "outtmpl": saida,
+                    "noplaylist": True,
+                }
+
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+
+                arquivo = None
+                ext_real = "mp4"
+                for f in os.listdir(PASTA_TEMP):
+                    if f.startswith(nome_base):
+                        arquivo = os.path.join(PASTA_TEMP, f)
+                        ext_real = f.rsplit(".", 1)[-1]
+                        break
+
+                if not arquivo or not os.path.exists(arquivo):
+                    self.responder_json(500, {"erro": "Arquivo nao encontrado apos download"})
+                    return
+
+                tamanho = os.path.getsize(arquivo)
+                self.send_response(200)
+                self.send_cors()
+                self.send_header("Content-Type", f"video/{ext_real}")
+                self.send_header("Content-Disposition", f'attachment; filename="video.{ext_real}"')
+                self.send_header("Content-Length", str(tamanho))
+                self.end_headers()
+
+                with open(arquivo, "rb") as f:
+                    shutil.copyfileobj(f, self.wfile)
+
+                os.remove(arquivo)
+
+            except Exception as e:
+                self.responder_json(500, {"erro": str(e)})
+
+        else:
+            self.responder_json(404, {"erro": "Rota nao encontrada"})
+
+    def servir_arquivo(self, nome, content_type):
+        caminho = os.path.join(BASE_DIR, nome)
+        if not os.path.exists(caminho):
+            self.responder_json(404, {"erro": "Arquivo nao encontrado"})
+            return
+        with open(caminho, "rb") as f:
+            conteudo = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(conteudo)))
+        self.end_headers()
+        self.wfile.write(conteudo)
+
+    def responder_json(self, codigo, dados):
+        body = json.dumps(dados, ensure_ascii=False).encode("utf-8")
+        self.send_response(codigo)
+        self.send_cors()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class ServidorMultiThread(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+    def handle_error(self, request, client_address):
+        pass
+
+
+if __name__ == "__main__":
+    print(f"VideoHub rodando na porta {PORT}")
+    while True:
+        try:
+            server = ServidorMultiThread(("0.0.0.0", PORT), Handler)
+            server.serve_forever()
+        except Exception as e:
+            print(f"[aviso] Reiniciando: {e}")
+            time.sleep(1)
