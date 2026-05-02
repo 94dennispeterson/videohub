@@ -83,30 +83,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
 
-                # Monta opções de qualidade baseadas na altura do vídeo
-                alturas = set()
-                for f in info.get("formats", []):
-                    h = f.get("height")
-                    if h and f.get("vcodec", "none") != "none":
-                        alturas.add(h)
-
-                if not alturas:
-                    alturas = {720}  # fallback
-
-                formatos = []
-                for h in sorted(alturas, reverse=True)[:5]:
-                    formatos.append({
-                        "label": f"{h}p (MP4)",
-                        "format_id": f"bv[height<={h}]+ba/b[height<={h}]/best",
-                        "ext": "mp4"
-                    })
-
-                # Sempre adiciona opção "Melhor qualidade"
-                formatos.insert(0, {
-                    "label": "Melhor qualidade (MP4)",
-                    "format_id": "bv+ba/best",
-                    "ext": "mp4"
-                })
+                # Monta opções de qualidade simples e confiáveis
+                formatos = [
+                    {"label": "Melhor qualidade (MP4)", "format_id": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best", "ext": "mp4"},
+                    {"label": "Qualidade média (MP4)",  "format_id": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best", "ext": "mp4"},
+                    {"label": "Menor tamanho (MP4)",    "format_id": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best", "ext": "mp4"},
+                ]
 
                 self.responder_json(200, {
                     "titulo": info.get("title", "video"),
