@@ -9,26 +9,61 @@ import socketserver
 import subprocess
 import sys
 
-# Instala ffmpeg se não estiver disponível
+# Instala ffmpeg binário via yt-dlp se não estiver disponível
 def garantir_ffmpeg():
     try:
-        subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
-        print("[ffmpeg] já instalado")
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        print("[ffmpeg] instalando...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "imageio[ffmpeg]"])
-        # Tenta via apt como fallback
-        try:
-            subprocess.run(["apt-get", "install", "-y", "-q", "ffmpeg"], capture_output=True)
-            print("[ffmpeg] instalado via apt")
-        except Exception:
-            pass
+        result = subprocess.run(["ffmpeg", "-version"], capture_output=True)
+        if result.returncode == 0:
+            print("[ffmpeg] já instalado no sistema")
+            return
+    except FileNotFoundError:
+        pass
+
+    print("[ffmpeg] baixando binário via yt-dlp...")
+    try:
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install", "-q", "yt-dlp"
+        ])
+        # Usa o yt-dlp para baixar o ffmpeg
+        subprocess.check_call([
+            sys.executable, "-c",
+            "import yt_dlp.utils; print(yt_dlp.utils.FFMPEG_PATH if hasattr(yt_dlp.utils, \"FFMPEG_PATH\") else \"N/A\")"
+        ])
+        # Tenta instalar ffmpeg-python que inclui binários
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install", "-q", "ffmpeg-python"
+        ])
+        # Baixa o binário do ffmpeg diretamente
+        import urllib.request
+        ffmpeg_dir = os.path.join(tempfile.gettempdir(), "ffmpeg_bin")
+        os.makedirs(ffmpeg_dir, exist_ok=True)
+        ffmpeg_path = os.path.join(ffmpeg_dir, "ffmpeg")
+        if not os.path.exists(ffmpeg_path):
+            print("[ffmpeg] baixando binário estático...")
+            url = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+            tar_path = os.path.join(ffmpeg_dir, "ffmpeg.tar.xz")
+            urllib.request.urlretrieve(url, tar_path)
+            subprocess.check_call(["tar", "-xf", tar_path, "-C", ffmpeg_dir, "--strip-components=2", "--wildcards", "*/bin/ffmpeg"])
+            os.chmod(ffmpeg_path, 0o755)
+        os.environ["PATH"] = ffmpeg_dir + ":" + os.environ.get("PATH", "")
+        print(f"[ffmpeg] binário disponível em {ffmpeg_path}")
+    except Exception as e:
+        print(f"[ffmpeg] erro ao instalar: {e}")
 
 garantir_ffmpeg()
 
 import yt_dlp
 
 PORT = int(os.environ.get("PORT", 8765))
+
+FFMPEG_DIR = os.path.join(tempfile.gettempdir(), "ffmpeg_bin")
+
+def get_ydl_base_opts():
+    opts = {"quiet": True, "no_warnings": True}
+    ffmpeg_path = os.path.join(FFMPEG_DIR, "ffmpeg")
+    if os.path.exists(ffmpeg_path):
+        opts["ffmpeg_location"] = FFMPEG_DIR
+    return opts
 
 PASTA_TEMP = os.path.join(tempfile.gettempdir(), "videohub_downloads")
 os.makedirs(PASTA_TEMP, exist_ok=True)
@@ -95,7 +130,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.responder_json(400, {"erro": "URL nao fornecida"})
                 return
             try:
-                ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+                ydl_opts = get_ydl_base_opts()
+                ydl_opts["skip_download"] = True
                 cookie_file = get_cookie_file(url)
                 if cookie_file:
                     ydl_opts["cookiefile"] = cookie_file
@@ -143,27 +179,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 sucesso = False
                 ultimo_erro = ""
                 for formato_tentativa in formatos_tentativa:
-                    ydl_opts = {
-                        "quiet": True,
-                        "no_warnings": True,
+                    ydl_opts = get_ydl_base_opts()
+                    ydl_opts.update({
                         "format": formato_tentativa,
                         "outtmpl": saida,
                         "noplaylist": True,
                         "merge_output_format": "mp4",
-                        # Converte para H.264+AAC — único codec que iOS aceita sem erro
-                        "postprocessors": [{
+                    })
+                    ffmpeg_path = os.path.join(FFMPEG_DIR, "ffmpeg")
+                    if os.path.exists(ffmpeg_path):
+                        ydl_opts["postprocessors"] = [{
                             "key": "FFmpegVideoConvertor",
                             "preferedformat": "mp4",
-                        }],
-                        "postprocessor_args": {
+                        }]
+                        ydl_opts["postprocessor_args"] = {
                             "ffmpegvideoconvertor": [
                                 "-vcodec", "libx264",
                                 "-acodec", "aac",
                                 "-movflags", "+faststart",
                                 "-pix_fmt", "yuv420p",
                             ]
-                        },
-                    }
+                        }
                     if cookie_file:
                         ydl_opts["cookiefile"] = cookie_file
                     try:
