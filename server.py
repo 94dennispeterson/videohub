@@ -16,6 +16,27 @@ os.makedirs(PASTA_TEMP, exist_ok=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Salva cookies das variáveis de ambiente em arquivos temporários
+COOKIES_DIR = os.path.join(tempfile.gettempdir(), "videohub_cookies")
+os.makedirs(COOKIES_DIR, exist_ok=True)
+
+COOKIE_FILES = {}
+for plat, env_var in [("youtube", "Cookies_youtube"), ("instagram", "Cookies_instagram")]:
+    conteudo = os.environ.get(env_var, "")
+    if conteudo.strip():
+        caminho = os.path.join(COOKIES_DIR, f"{plat}.txt")
+        with open(caminho, "w", encoding="utf-8") as f:
+            f.write(conteudo)
+        COOKIE_FILES[plat] = caminho
+        print(f"[cookies] {plat} carregado")
+
+def get_cookie_file(url):
+    if "youtube.com" in url or "youtu.be" in url:
+        return COOKIE_FILES.get("youtube")
+    if "instagram.com" in url:
+        return COOKIE_FILES.get("instagram")
+    return None
+
 class Handler(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
@@ -48,6 +69,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             try:
                 ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+                cookie_file = get_cookie_file(url)
+                if cookie_file:
+                    ydl_opts["cookiefile"] = cookie_file
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
 
@@ -108,6 +132,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "outtmpl": saida,
                     "noplaylist": True,
                 }
+
+                cookie_file = get_cookie_file(url)
+                if cookie_file:
+                    ydl_opts["cookiefile"] = cookie_file
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
