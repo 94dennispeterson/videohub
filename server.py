@@ -6,6 +6,25 @@ import tempfile
 import shutil
 import time
 import socketserver
+import subprocess
+import sys
+
+# Instala ffmpeg se não estiver disponível
+def garantir_ffmpeg():
+    try:
+        subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
+        print("[ffmpeg] já instalado")
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("[ffmpeg] instalando...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "imageio[ffmpeg]"])
+        # Tenta via apt como fallback
+        try:
+            subprocess.run(["apt-get", "install", "-y", "-q", "ffmpeg"], capture_output=True)
+            print("[ffmpeg] instalado via apt")
+        except Exception:
+            pass
+
+garantir_ffmpeg()
 
 import yt_dlp
 
