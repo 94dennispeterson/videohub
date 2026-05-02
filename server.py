@@ -124,13 +124,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             try:
                 nome_base = f"video_{int(time.time())}"
                 saida = os.path.join(PASTA_TEMP, nome_base + ".%(ext)s")
+                saida_final = os.path.join(PASTA_TEMP, nome_base + ".mp4")
 
                 cookie_file = get_cookie_file(url)
 
-                # Tenta o formato solicitado, com fallbacks progressivos
+                # Sempre força MP4 com H.264+AAC (compatível com iOS)
                 formatos_tentativa = [
                     fmt,
-                    f"{fmt}/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                     "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                     "best",
                 ]
@@ -145,6 +145,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "outtmpl": saida,
                         "noplaylist": True,
                         "merge_output_format": "mp4",
+                        # Converte para H.264+AAC — único codec que iOS aceita sem erro
+                        "postprocessors": [{
+                            "key": "FFmpegVideoConvertor",
+                            "preferedformat": "mp4",
+                        }],
+                        "postprocessor_args": {
+                            "ffmpegvideoconvertor": [
+                                "-vcodec", "libx264",
+                                "-acodec", "aac",
+                                "-movflags", "+faststart",
+                                "-pix_fmt", "yuv420p",
+                            ]
+                        },
                     }
                     if cookie_file:
                         ydl_opts["cookiefile"] = cookie_file
@@ -161,12 +174,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.responder_json(500, {"erro": ultimo_erro})
                     return
 
+                # Encontra o arquivo gerado
                 arquivo = None
-                ext_real = "mp4"
                 for f in os.listdir(PASTA_TEMP):
                     if f.startswith(nome_base):
                         arquivo = os.path.join(PASTA_TEMP, f)
-                        ext_real = f.rsplit(".", 1)[-1]
                         break
 
                 if not arquivo or not os.path.exists(arquivo):
@@ -176,8 +188,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 tamanho = os.path.getsize(arquivo)
                 self.send_response(200)
                 self.send_cors()
-                self.send_header("Content-Type", f"video/{ext_real}")
-                self.send_header("Content-Disposition", f'attachment; filename="video.{ext_real}"')
+                self.send_header("Content-Type", "video/mp4")
+                self.send_header("Content-Disposition", 'attachment; filename="video.mp4"')
                 self.send_header("Content-Length", str(tamanho))
                 self.end_headers()
 
