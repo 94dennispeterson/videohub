@@ -125,20 +125,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 nome_base = f"video_{int(time.time())}"
                 saida = os.path.join(PASTA_TEMP, nome_base + ".%(ext)s")
 
-                ydl_opts = {
-                    "quiet": True,
-                    "no_warnings": True,
-                    "format": fmt,
-                    "outtmpl": saida,
-                    "noplaylist": True,
-                }
-
                 cookie_file = get_cookie_file(url)
-                if cookie_file:
-                    ydl_opts["cookiefile"] = cookie_file
 
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
+                # Tenta o formato solicitado, com fallbacks progressivos
+                formatos_tentativa = [
+                    fmt,
+                    f"{fmt}/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                    "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                    "best",
+                ]
+
+                sucesso = False
+                ultimo_erro = ""
+                for formato_tentativa in formatos_tentativa:
+                    ydl_opts = {
+                        "quiet": True,
+                        "no_warnings": True,
+                        "format": formato_tentativa,
+                        "outtmpl": saida,
+                        "noplaylist": True,
+                        "merge_output_format": "mp4",
+                    }
+                    if cookie_file:
+                        ydl_opts["cookiefile"] = cookie_file
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([url])
+                        sucesso = True
+                        break
+                    except Exception as e:
+                        ultimo_erro = str(e)
+                        continue
+
+                if not sucesso:
+                    self.responder_json(500, {"erro": ultimo_erro})
+                    return
 
                 arquivo = None
                 ext_real = "mp4"
